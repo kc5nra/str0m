@@ -7,6 +7,7 @@ use crate::change::{SdpAnswer, SdpOffer};
 use crate::crypto::KeyingMaterial;
 use crate::crypto::SrtpProfile;
 use crate::format::Codec;
+use crate::packet::HoldBack;
 use crate::packet::{DepacketizingBuffer, RtpMeta};
 use crate::rtp_::{Frequency, MediaTime, RtpHeader};
 use crate::streams::register::ReceiverRegister;
@@ -96,7 +97,7 @@ pub fn depack(data: &[u8]) -> Option<()> {
         _ => unreachable!(),
     };
 
-    let mut depack = DepacketizingBuffer::new(codec.into(), rng.usize(300)?);
+    let mut depack = DepacketizingBuffer::new(codec.into(), HoldBack::Frames(rng.usize(300)?));
 
     let exts = random_extmap(&mut rng, 10)?;
 

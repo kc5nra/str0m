@@ -11,7 +11,7 @@ use crate::media::KeyframeRequestKind;
 use crate::media::Media;
 use crate::media::{MediaAdded, MediaChanged};
 use crate::net;
-use crate::packet::SendSideBandwithEstimator;
+use crate::packet::{HoldBack, SendSideBandwithEstimator};
 use crate::packet::{LeakyBucketPacer, NullPacer, Pacer, PacerImpl};
 use crate::rtp::RawPacket;
 use crate::rtp_::Direction;
@@ -56,8 +56,8 @@ pub(crate) struct Session {
     /// The app m-line. Spliced into medias above.
     app: Option<(Mid, usize)>,
 
-    reordering_size_audio: usize,
-    reordering_size_video: usize,
+    reordering_size_audio: HoldBack,
+    reordering_size_video: HoldBack,
     pub send_buffer_audio: usize,
     pub send_buffer_video: usize,
 

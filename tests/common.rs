@@ -13,7 +13,7 @@ use str0m::net::Protocol;
 use str0m::net::Receive;
 use str0m::rtp::ExtensionMap;
 use str0m::rtp::RtpHeader;
-use str0m::Candidate;
+use str0m::{Candidate, HoldBack};
 use str0m::{Event, Input, Output, Rtc, RtcError};
 use tracing::info_span;
 use tracing::Span;
@@ -228,7 +228,7 @@ pub fn connect_l_r() -> (TestRtc, TestRtc) {
         .set_rtp_mode(true)
         .enable_raw_packets(true)
         // release packet straight away
-        .set_reordering_size_audio(0)
+        .set_reordering_size_audio(HoldBack::None)
         .build();
 
     let mut l = TestRtc::new_with_rtc(info_span!("L"), rtc1);

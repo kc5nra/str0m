@@ -4,6 +4,8 @@ use std::fmt;
 use std::ops::{Range, RangeInclusive};
 use std::time::Instant;
 
+use std::time::Duration;
+
 use crate::rtp_::{ExtensionValues, MediaTime, RtpHeader, SenderInfo, SeqNo};
 
 use super::contiguity::{self, Contiguity};
@@ -75,9 +77,41 @@ struct Entry {
     tail: bool,
 }
 
+/// Buffering strategy for depacketized frames
+#[derive(Copy, Clone, Debug)]
+pub enum HoldBack {
+    /// Maximum duration retained
+    Time(Duration),
+    /// Maximum frames retained
+    Frames(usize),
+    /// Frames are emitted immediately
+    None,
+}
+
+impl HoldBack {
+    fn is_more_than_hold_back(&self, buffer: &DepacketizingBuffer) -> bool {
+        match self {
+            HoldBack::None => true,
+            HoldBack::Frames(frames) => buffer.segments.len() >= *frames,
+            HoldBack::Time(max_duration) => {
+                // We must have both entries in the queue and max_time set
+                if let (Some(front), Some(max_time)) = (buffer.queue.front(), buffer.max_time) {
+                    let front_time = front.meta.time;
+                    assert!(max_time >= front_time);
+
+                    let queue_time: Duration = (max_time - front_time).try_into().unwrap();
+                    queue_time >= *max_duration
+                } else {
+                    false
+                }
+            }
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct DepacketizingBuffer {
-    hold_back: usize,
+    hold_back: HoldBack,
     depack: CodecDepacketizer,
     queue: VecDeque<Entry>,
     segments: Vec<(usize, usize)>,
@@ -88,7 +122,7 @@ pub struct DepacketizingBuffer {
 }
 
 impl DepacketizingBuffer {
-    pub(crate) fn new(depack: CodecDepacketizer, hold_back: usize) -> Self {
+    pub(crate) fn new(depack: CodecDepacketizer, hold_back: HoldBack) -> Self {
         let contiguity = match depack {
             CodecDepacketizer::Vp8(_) => Contiguity::Vp8(Vp8Contiguity::new()),
             CodecDepacketizer::Vp9(_) => Contiguity::Vp9(Vp9Contiguity::new()),
@@ -118,7 +152,7 @@ impl DepacketizingBuffer {
         // As a special case, per popular demand, if hold_back is 0, we do emit
         // out of order packets.
         if let Some((last, _)) = self.last_emitted {
-            if meta.seq_no <= last && self.hold_back > 0 {
+            if meta.seq_no <= last && matches!(self.hold_back, HoldBack::None) {
                 trace!("Drop before emitted: {} <= {}", meta.seq_no, last);
                 return;
             }
@@ -187,7 +221,7 @@ impl DepacketizingBuffer {
         // Otherwise, we wait for retransmissions up to `hold_back` frames
         // and re-evaluate contiguity based on codec specific information
 
-        let more_than_hold_back = self.segments.len() >= self.hold_back;
+        let more_than_hold_back = self.hold_back.is_more_than_hold_back(self);
         let contiguous_seq = self.is_following_last(start);
         let wait_for_contiguity = !contiguous_seq && !more_than_hold_back;
 
@@ -516,7 +550,7 @@ mod test {
         )],
     ) {
         let depack = CodecDepacketizer::Boxed(Box::new(TestDepack));
-        let mut buf = DepacketizingBuffer::new(depack, hold_back);
+        let mut buf = DepacketizingBuffer::new(depack, HoldBack::Frames(hold_back));
 
         let mut step = 1;
 
@@ -739,8 +773,10 @@ mod test {
             ),
         ];
 
-        let mut buffer =
-            DepacketizingBuffer::new(CodecDepacketizer::Vp9(Vp9Depacketizer::default()), 30);
+        let mut buffer = DepacketizingBuffer::new(
+            CodecDepacketizer::Vp9(Vp9Depacketizer::default()),
+            HoldBack::Frames(30),
+        );
 
         for input in &inputs {
             let (meta, data) = construct_input(input.clone());
@@ -750,8 +786,10 @@ mod test {
         let res0before = buffer.pop().unwrap().unwrap(); // Pop PID: 23860, `contiguous_seq == true`.
         let res1before = buffer.pop().unwrap().unwrap(); // Pop PID: 23861, `contiguous_seq == true`.
 
-        let mut buffer =
-            DepacketizingBuffer::new(CodecDepacketizer::Vp9(Vp9Depacketizer::default()), 30);
+        let mut buffer = DepacketizingBuffer::new(
+            CodecDepacketizer::Vp9(Vp9Depacketizer::default()),
+            HoldBack::Frames(30),
+        );
 
         for input in &inputs {
             let (meta, data) = construct_input(input.clone());

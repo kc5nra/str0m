@@ -36,6 +36,7 @@ mod null;
 use null::{NullDepacketizer, NullPacketizer};
 
 mod buffer_rx;
+pub use buffer_rx::HoldBack;
 pub(crate) use buffer_rx::{Depacketized, DepacketizingBuffer, RtpMeta};
 mod contiguity;
 mod contiguity_vp8;

@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use crate::packet::HoldBack;
 use crate::rtp::{Extension, ExtensionMap};
 use crate::Bitrate;
 use crate::RtcConfig;
@@ -55,8 +56,8 @@ pub fn random_config(rng: &mut Rng) -> Option<RtcConfig> {
     } else {
         c = c.enable_bwe(Some(Bitrate::bps(rng.u64(u64::MAX)?)));
     }
-    c = c.set_reordering_size_audio(rng.usize(usize::MAX)?);
-    c = c.set_reordering_size_video(rng.usize(usize::MAX)?);
+    c = c.set_reordering_size_audio(HoldBack::Frames(rng.usize(usize::MAX)?));
+    c = c.set_reordering_size_video(HoldBack::Frames(rng.usize(usize::MAX)?));
     c = c.set_send_buffer_audio(rng.usize(usize::MAX)?.saturating_add(1)); // panics if set to 0
     c = c.set_send_buffer_video(rng.usize(usize::MAX)?);
     c = c.set_rtp_mode(rng.bool()?);

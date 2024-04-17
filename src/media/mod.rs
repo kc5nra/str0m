@@ -6,7 +6,7 @@ use std::time::Instant;
 use crate::change::AddMedia;
 use crate::format::CodecConfig;
 use crate::io::{Id, DATAGRAM_MTU};
-use crate::packet::{DepacketizingBuffer, Payloader, RtpMeta};
+use crate::packet::{DepacketizingBuffer, HoldBack, Payloader, RtpMeta};
 use crate::rtp_::ExtensionMap;
 use crate::rtp_::SRTP_BLOCK_SIZE;
 use crate::rtp_::SRTP_OVERHEAD;
@@ -269,8 +269,8 @@ impl Media {
         &mut self,
         rid: Option<Rid>,
         packet: RtpPacket,
-        reordering_size_audio: usize,
-        reordering_size_video: usize,
+        reordering_size_audio: HoldBack,
+        reordering_size_video: HoldBack,
         params: &[PayloadParams],
     ) {
         if !self.dir.is_receiving() {

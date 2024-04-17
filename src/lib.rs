@@ -710,6 +710,8 @@ pub mod error {
     pub use crate::sdp::SdpError;
 }
 
+pub use packet::HoldBack;
+
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Errors for the whole Rtc engine.
@@ -1712,8 +1714,8 @@ pub struct RtcConfig {
     stats_interval: Option<Duration>,
     /// Whether to use Bandwidth Estimation to discover the egress bandwidth.
     bwe_initial_bitrate: Option<Bitrate>,
-    reordering_size_audio: usize,
-    reordering_size_video: usize,
+    reordering_size_audio: HoldBack,
+    reordering_size_video: HoldBack,
     send_buffer_audio: usize,
     send_buffer_video: usize,
     rtp_mode: bool,
@@ -1988,8 +1990,8 @@ impl RtcConfig {
     ///
     /// This setting is ignored in [RTP mode][`RtcConfig::set_rtp_mode()`] where RTP
     /// packets can arrive out of order.
-    pub fn set_reordering_size_audio(mut self, size: usize) -> Self {
-        self.reordering_size_audio = size;
+    pub fn set_reordering_size_audio(mut self, hold_back: HoldBack) -> Self {
+        self.reordering_size_audio = hold_back;
 
         self
     }
@@ -1997,16 +1999,16 @@ impl RtcConfig {
     /// Returns the setting for audio reordering size.
     ///
     /// ```
-    /// # use str0m::Rtc;
+    /// # use str0m::{Rtc, HoldBack};
     /// let config = Rtc::builder();
     ///
     /// // Defaults to 15.
-    /// assert_eq!(config.reordering_size_audio(), 15);
+    /// assert!(matches!(config.reordering_size_audio(), HoldBack::Frames(15)));
     /// ```
     ///
     /// This setting is ignored in [RTP mode][`RtcConfig::set_rtp_mode()`] where RTP
     /// packets can arrive out of order.
-    pub fn reordering_size_audio(&self) -> usize {
+    pub fn reordering_size_audio(&self) -> HoldBack {
         self.reordering_size_audio
     }
 
@@ -2024,8 +2026,8 @@ impl RtcConfig {
     ///
     /// This setting is ignored in [RTP mode][`RtcConfig::set_rtp_mode()`] where RTP
     /// packets can arrive out of order.
-    pub fn set_reordering_size_video(mut self, size: usize) -> Self {
-        self.reordering_size_video = size;
+    pub fn set_reordering_size_video(mut self, hold_back: HoldBack) -> Self {
+        self.reordering_size_video = hold_back;
 
         self
     }
@@ -2033,16 +2035,16 @@ impl RtcConfig {
     /// Returns the setting for video reordering size.
     ///
     /// ```
-    /// # use str0m::Rtc;
+    /// # use str0m::{Rtc, HoldBack};
     /// let config = Rtc::builder();
     ///
     /// // Defaults to 30.
-    /// assert_eq!(config.reordering_size_video(), 30);
+    /// assert!(matches!(config.reordering_size_video(), HoldBack::Frames(30)));
     /// ```
     ///
     /// This setting is ignored in [RTP mode][`RtcConfig::set_rtp_mode()`] where RTP
     /// packets can arrive out of order.
-    pub fn reordering_size_video(&self) -> usize {
+    pub fn reordering_size_video(&self) -> HoldBack {
         self.reordering_size_video
     }
 
@@ -2159,8 +2161,8 @@ impl Default for RtcConfig {
             exts: ExtensionMap::standard(),
             stats_interval: None,
             bwe_initial_bitrate: None,
-            reordering_size_audio: 15,
-            reordering_size_video: 30,
+            reordering_size_audio: HoldBack::Frames(15),
+            reordering_size_video: HoldBack::Frames(30),
             send_buffer_audio: 50,
             send_buffer_video: 1000,
             rtp_mode: false,
