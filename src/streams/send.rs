@@ -365,14 +365,16 @@ impl StreamTx {
 
         let mut header = match next.kind {
             NextPacketKind::Regular => {
-                let rtx_possible = param.resend().is_some();
+                let rtx_possible = param.resend().is_some() || param.fb_nack;
 
                 if rtx_possible {
                     // Remember PT We want to set these directly on `self` here, but can't
                     // because we already have a mutable borrow. We are using pt_main
                     // since the above loop figuring out param needs to be correct also
                     // for the NextPacketKind::Blank case.
-                    set_pt_for_padding = Some(pt_main);
+                    if param.resend().is_some() {
+                        set_pt_for_padding = Some(pt_main);
+                    }
                 } else {
                     // If the PT we're sending on doesn't have a corresponding RTX PT,
                     // the packet is de-facto not nackable.
@@ -403,20 +405,24 @@ impl StreamTx {
                 //   got a "real" PTX RT, either via set_pt_for_padding above, or via
                 //   the on_first_timeout() further down.
                 // Either way, unwrapping this optional _should_ be correct.
-                let pt_rtx = param.resend().expect("PT for resend or blank");
 
-                // Clone header to not change the original (cached) header.
-                let mut header = header_ref.clone();
+                // PT for resend or blank
+                if let Some(pt_rtx) = param.resend() {
+                    // Clone header to not change the original (cached) header.
+                    let mut header = header_ref.clone();
 
-                // Update clone of header (to not change the cached value).
-                header.payload_type = pt_rtx;
-                header.ssrc = ssrc_rtx.expect("Should have RTX SSRC for resends");
-                header.sequence_number = *next.seq_no as u16;
+                    // Update clone of header (to not change the cached value).
+                    header.payload_type = pt_rtx;
+                    header.ssrc = ssrc_rtx.expect("Should have RTX SSRC for resends");
+                    header.sequence_number = *next.seq_no as u16;
 
-                header.ext_vals.rid = None;
-                header.ext_vals.rid_repair = rid;
-
-                header
+                    header.ext_vals.rid = None;
+                    header.ext_vals.rid_repair = rid;
+                    header
+                } else {
+                    // This is a request for rtx on the same SSRC/PT
+                    header_ref.clone()
+                }
             }
         };
 
@@ -437,8 +443,11 @@ impl StreamTx {
         // For resends, the original seq_no is inserted before the payload.
         let mut original_seq_len = 0;
         if let NextPacketKind::Resend(orig_seq_no) = next.kind {
-            original_seq_len = RtpHeader::write_original_sequence_number(body_out, orig_seq_no);
-            body_out = &mut body_out[original_seq_len..];
+            // If this is a wrapped RTX
+            if ssrc_rtx.is_some() {
+                original_seq_len = RtpHeader::write_original_sequence_number(body_out, orig_seq_no);
+                body_out = &mut body_out[original_seq_len..];
+            }
         }
 
         let pkt = &next.pkt;
@@ -578,7 +587,12 @@ impl StreamTx {
         self.stats.update_packet_counts(len, true);
         self.stats.bytes_retransmitted.push(now, len);
 
-        let seq_no = self.seq_no_rtx.inc();
+        // Only increment if a "real" RTX packet
+        let seq_no = if self.rtx.is_some() {
+            self.seq_no_rtx.inc()
+        } else {
+            pkt.seq_no
+        };
 
         let orig_seq_no = pkt.seq_no;
 
