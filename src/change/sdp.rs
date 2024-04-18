@@ -249,7 +249,7 @@ impl<'a> SdpApi<'a> {
             Id::<20>::random().to_string()
         };
 
-        let rtx = kind.is_video().then(|| self.rtc.session.streams.new_ssrc());
+        let rtx = None; //kind.is_video().then(|| self.rtc.session.streams.new_ssrc());
         let ssrcs = vec![(self.rtc.session.streams.new_ssrc(), rtx)];
 
         // TODO: let user configure stream/track name.
